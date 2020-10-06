@@ -1,0 +1,7 @@
+apiVersion: xxx.bluemoon.com.cn/v1
+kind: ImoocPod
+metadata:
+  name: imoocpod-sample
+spec:
+  # Add fields here
+  foo: bar

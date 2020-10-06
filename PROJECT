@@ -2,6 +2,10 @@ domain: bluemoon.com.cn
 layout: go.kubebuilder.io/v2
 projectName: imoocpod-operator
 repo: github.com/imooc-com/imoocpod-operator
+resources:
+- group: xxx
+  kind: ImoocPod
+  version: v1
 version: 3-alpha
 plugins:
   go.sdk.operatorframework.io/v2-alpha: {}
