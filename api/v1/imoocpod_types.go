@@ -29,13 +29,14 @@ type ImoocPodSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of ImoocPod. Edit ImoocPod_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Size int32 `json:"size"`
 }
 
 // ImoocPodStatus defines the observed state of ImoocPod
 type ImoocPodStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Size int32 `json:"size"`
 }
 
 // +kubebuilder:object:root=true
