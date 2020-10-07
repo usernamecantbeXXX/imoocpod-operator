@@ -93,7 +93,7 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *ImoocPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&xxxv1.ImoocPod{}).
-		Owns(&appv1.Deployment{}).
+		Owns(&appsv1.Deployment{}).
 		Owns(&v1.Pod{}).
 		Complete(r)
 }
