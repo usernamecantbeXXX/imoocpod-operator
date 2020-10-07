@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"github.com/go-logr/logr"
-	"k8s.io/api/apps/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -91,8 +90,8 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *ImoocPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&xxxv1.ImoocPod{}).
-		Owns(&v1beta1.Deployment{}).
-		Owns(&v1.Pod{}).
+		//Owns(&v1beta1.Deployment{}).
+		//Owns(&v1.Pod{}).
 		Complete(r)
 }
 
