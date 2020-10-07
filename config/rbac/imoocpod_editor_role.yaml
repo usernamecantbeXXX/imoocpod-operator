@@ -22,3 +22,14 @@ rules:
   - imoocpods/status
   verbs:
   - get
+- apiGroups:
+    - ""
+  resources:
+    - events
+    - namespaces
+    - nodes
+    - pods
+  verbs:
+    - get
+    - list
+    - watch
