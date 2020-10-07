@@ -109,7 +109,7 @@ func newPodForCR(cr *xxxv1.ImoocPod) *v1.Pod {
 				{
 					Name:    "busybox",
 					Image:   "busybox",
-					Command: []string{"slepp", "3600"},
+					Command: []string{"sleep", "3600"},
 				},
 			},
 		},
