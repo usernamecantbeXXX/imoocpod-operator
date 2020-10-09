@@ -165,7 +165,7 @@ func (r *ImoocPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&xxxv1.ImoocPod{}).
 		Owns(&appsv1.Deployment{}).
-		//Owns(&corev1.Pod{}).
+		Owns(&corev1.Pod{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,
 		}).
