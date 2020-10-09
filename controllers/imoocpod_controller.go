@@ -20,11 +20,13 @@ import (
 	"context"
 	"github.com/go-logr/logr"
 	xxxv1 "github.com/imooc-com/imoocpod-operator/api/v1"
-	v1 "k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 )
 
 // ImoocPodReconciler reconciles a ImoocPod object
@@ -36,6 +38,8 @@ type ImoocPodReconciler struct {
 
 // +kubebuilder:rbac:groups=xxx.bluemoon.com.cn,resources=imoocpods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=xxx.bluemoon.com.cn,resources=imoocpods/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 
 //监听pod 的变化，实现监听的logic
 func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -86,24 +90,27 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *ImoocPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&xxxv1.ImoocPod{}).
-		//Owns(&v1beta1.Deployment{}).
-		//Owns(&v1.Pod{}).
+		Owns(&appsv1.Deployment{}).
+		//Owns(&corev1.Pod{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 2,
+		}).
 		Complete(r)
 }
 
 // newPodForCR retures a busybox pod with  the same name/namespace as the cr
-func newPodForCR(cr *xxxv1.ImoocPod) *v1.Pod {
+func newPodForCR(cr *xxxv1.ImoocPod) *corev1.Pod {
 	lables := map[string]string{
 		"app": cr.Name,
 	}
-	return &v1.Pod{
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-pod",
 			Namespace: cr.Namespace,
 			Labels:    lables,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name:    "busybox",
 					Image:   "busybox",
