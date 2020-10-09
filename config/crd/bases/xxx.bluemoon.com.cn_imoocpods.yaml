@@ -36,26 +36,28 @@ spec:
         spec:
           description: ImoocPodSpec defines the desired state of ImoocPod
           properties:
-            size:
+            replicas:
               description: Foo is an example field of ImoocPod. Edit ImoocPod_types.go
-                to remove/update
-              format: int32
+                to remove/update Size int32 `json:"size"`
               type: integer
           required:
-          - size
+          - replicas
           type: object
         status:
           description: ImoocPodStatus defines the observed state of ImoocPod
           properties:
-            nodes:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "make" to regenerate code after modifying
-                this file'
+            podNames:
               items:
                 type: string
               type: array
+            replicas:
+              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                of cluster Important: Run "make" to regenerate code after modifying
+                this file'
+              type: integer
           required:
-          - nodes
+          - podNames
+          - replicas
           type: object
       type: object
   version: v1
