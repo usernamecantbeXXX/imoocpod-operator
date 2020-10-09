@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: harbor.bluemoon.com.cn/operator/imoocpod-operator
-  newTag: v10
+  newTag: v13
