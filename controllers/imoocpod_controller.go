@@ -109,7 +109,6 @@ func newPodForCR(cr *xxxv1.ImoocPod) *corev1.Pod {
 			Namespace: cr.Namespace,
 			Labels:    lables,
 		},
-
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
