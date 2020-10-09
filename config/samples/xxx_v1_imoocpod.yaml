@@ -4,4 +4,4 @@ metadata:
   name: imoocpod-sample
 spec:
   # Add fields here
-  Replicas: 3
+  replicas: 3
