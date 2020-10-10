@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/go-logr/logr"
 	xxxv1 "github.com/imooc-com/imoocpod-operator/api/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,6 +42,8 @@ type ImoocPodReconciler struct {
 
 // +kubebuilder:rbac:groups=xxx.bluemoon.com.cn,resources=imoocpods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=xxx.bluemoon.com.cn,resources=imoocpods/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 
 //监听pod 的变化，实现监听的logic
 func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -161,7 +164,7 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *ImoocPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&xxxv1.ImoocPod{}).
-		//Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.Deployment{}).
 		//Owns(&corev1.Pod{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,
