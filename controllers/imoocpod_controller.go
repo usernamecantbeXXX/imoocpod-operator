@@ -29,7 +29,6 @@ import (
 	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -47,16 +46,16 @@ type ImoocPodReconciler struct {
 
 //监听pod 的变化，实现监听的logic
 func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	//_ = r.Log.WithValues("imoocpod", req.NamespacedName)
-	r.Log.Info("Recociling ImoocPod", "Request.Namespace", req.NamespacedName, "Request.Name", req.Name)
+	ctx := context.Background()
+	reqLogger := r.Log.WithValues("imoocpod", req.NamespacedName)
+	reqLogger.Info("Recociling ImoocPod", "Request.Namespace", req.NamespacedName, "Request.Name", req.Name)
 
 	// your logic here
 	//Fetch the ImoocPod instance 首先获取一个imoocpod的实例
 	instance := &xxxv1.ImoocPod{}
 	//r是k8s获取到的实例
 	//通过r去对instance进行赋值
-	err := r.Get(context.TODO(), req.NamespacedName, instance)
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -69,12 +68,12 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		"app": instance.Name, //资源的label来查找对应的pod
 	}
 	existingPods := &corev1.PodList{}
-	err = r.List(context.TODO(), existingPods, &client.ListOptions{
+	err = r.List(ctx, existingPods, &client.ListOptions{
 		Namespace:     req.Namespace,
 		LabelSelector: labels.SelectorFromSet(lbls),
 	})
 	if err != nil {
-		r.Log.Error(err, "取已经存在的pod失败")
+		reqLogger.Error(err, "取已经存在的pod失败")
 		return ctrl.Result{}, err
 	}
 	//2：获取到pod列表中的pod name
@@ -96,9 +95,9 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	if !reflect.DeepEqual(instance.Status, status) {
 		instance.Status = status //把期望状态给运行态
-		err := r.Client.Status().Update(context.TODO(), instance)
+		err := r.Client.Status().Update(ctx, instance)
 		if err != nil {
-			r.Log.Error(err, "更新pod失败")
+			reqLogger.Error(err, "更新pod失败")
 			return ctrl.Result{}, err
 		}
 	}
@@ -106,11 +105,11 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//4：len（pod） > 运行中的len（pod.replicas), 期望值小，需要 scale down delete
 	if len(existingPodNames) > instance.Spec.Replicas {
 		//delete
-		r.Log.Info("正在删除pod,当前的podNames和期望的replicas：", existingPodNames, instance.Spec.Replicas)
+		reqLogger.Info("正在删除pod,当前的podNames和期望的replicas：", existingPodNames, instance.Spec.Replicas)
 		pod := existingPods.Items[0]
-		err := r.Client.Delete(context.TODO(), &pod)
+		err := r.Client.Delete(ctx, &pod)
 		if err != nil {
-			r.Log.Error(err, "删除pod失败")
+			reqLogger.Error(err, "删除pod失败")
 			return ctrl.Result{}, err
 		}
 	}
@@ -118,7 +117,7 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	//5：len（pod） < 运行中的len（pod.replicas), 期望值大，需要 scale up create
 	if len(existingPodNames) > instance.Spec.Replicas {
 		//delete
-		r.Log.Info("正在创建pod,当前的podNames和期望的replicas：", existingPodNames, instance.Spec.Replicas)
+		reqLogger.Info("正在创建pod,当前的podNames和期望的replicas：", existingPodNames, instance.Spec.Replicas)
 		//Define a new Pod object
 		pod := newPodForCR(instance)
 
@@ -126,9 +125,9 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err := controllerutil.SetControllerReference(instance, pod, r.Scheme); err != nil {
 			return ctrl.Result{}, nil
 		}
-		err = r.Create(context.TODO(), pod)
+		err = r.Create(ctx, pod)
 		if err != nil {
-			r.Log.Error(err, "创建pod失败")
+			reqLogger.Error(err, "创建pod失败")
 			return ctrl.Result{}, err
 		}
 	}
@@ -143,10 +142,10 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		//Check if the Pod already exists
 		found := &corev1.Pod{}
-		err = r.Get(context.TODO(), types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, found)
+		err = r.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, found)
 		if err != nil && errors.IsNotFound(err) {
-			r.Log.Info("Create a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-			err = r.Create(context.TODO(), pod)
+			reqLogger.Info("Create a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
+			err = r.Create(ctx, pod)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -157,7 +156,7 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 
 		//pod已经存在，不用重新排队
-		r.Log.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)*/
+		reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)*/
 	return ctrl.Result{Requeue: true}, nil
 }
 
@@ -166,9 +165,6 @@ func (r *ImoocPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&xxxv1.ImoocPod{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Pod{}).
-		WithOptions(controller.Options{
-			MaxConcurrentReconciles: 2,
-		}).
 		Complete(r)
 }
 
@@ -179,9 +175,9 @@ func newPodForCR(cr *xxxv1.ImoocPod) *corev1.Pod {
 	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: cr.Name + "-pod",
-			Namespace:    cr.Namespace,
-			Labels:       lables,
+			Name:      cr.Name + "-pod",
+			Namespace: cr.Namespace,
+			Labels:    lables,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
