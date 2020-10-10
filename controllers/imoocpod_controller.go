@@ -24,12 +24,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // ImoocPodReconciler reconciles a ImoocPod object
@@ -47,8 +46,8 @@ type ImoocPodReconciler struct {
 //监听pod 的变化，实现监听的logic
 func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	reqLogger := r.Log.WithValues("imoocpod", req.NamespacedName)
-	reqLogger.Info("Recociling ImoocPod", "Request.Namespace", req.NamespacedName, "Request.Name", req.Name)
+	log := r.Log.WithValues("imoocpod", req.NamespacedName)
+	log.Info("Recociling ImoocPod", "Request.Namespace", req.NamespacedName, "Request.Name", req.Name)
 
 	// your logic here
 	//Fetch the ImoocPod instance 首先获取一个imoocpod的实例
@@ -58,135 +57,122 @@ func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			log.Info("ImoocPod resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
+		log.Error(err, "Failed to get ImoocPod")
+		return ctrl.Result{}, err
+	}
+	// Check if the deployment already exists, if not create a new one
+	found := &appsv1.Deployment{}
+	err = r.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		// Define a new deployment
+		dep := r.deploymentForImoocPod(instance)
+		log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+		err = r.Create(ctx, dep)
+		if err != nil {
+			log.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+			return ctrl.Result{}, err
+		}
+		// Deployment created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get Deployment")
 		return ctrl.Result{}, err
 	}
 
-	//1：获取 name 对应的所有的pod列表
-	lbls := labels.Set{
-		"app": instance.Name, //资源的label来查找对应的pod
+	// Ensure the deployment size is the same as the spec
+	size := instance.Spec.Replicas
+	if *found.Spec.Replicas != size {
+		found.Spec.Replicas = &size
+		err = r.Update(ctx, found)
+		if err != nil {
+			log.Error(err, "Failed to update Deployment", "Deployment.Namespace", found.Namespace, "Deployment.Name", found.Name)
+			return ctrl.Result{}, err
+		}
+		// Spec updated - return and requeue
+		return ctrl.Result{Requeue: true}, nil
 	}
-	existingPods := &corev1.PodList{}
-	err = r.List(ctx, existingPods, &client.ListOptions{
-		Namespace:     req.Namespace,
-		LabelSelector: labels.SelectorFromSet(lbls),
-	})
-	if err != nil {
-		reqLogger.Error(err, "取已经存在的pod失败")
+
+	// Update the ImoocPod status with the pod names
+	// List the pods for this memcached's deployment
+	podList := &corev1.PodList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(labelsForImoocPod(instance.Name)),
+	}
+	if err = r.List(ctx, podList, listOpts...); err != nil {
+		log.Error(err, "Failed to list pods", "ImoocPod.Namespace", instance.Namespace, "ImoocPod.Name", instance.Name)
 		return ctrl.Result{}, err
 	}
-	//2：获取到pod列表中的pod name
-	var existingPodNames []string
-	for _, pod := range existingPods.Items {
-		if pod.GetObjectMeta().GetDeletionTimestamp() != nil {
-			continue
-		}
-		if pod.Status.Phase == corev1.PodPending || pod.Status.Phase == corev1.PodRunning {
-			existingPodNames = append(existingPodNames, pod.GetObjectMeta().GetName())
-		}
-	}
+	podNames := getPodNames(podList.Items)
 
-	//3：update pod.status != 运行中的status
-	//比较DeepEqual
-	status := xxxv1.ImoocPodStatus{
-		PodNames: existingPodNames,
-		Replicas: len(existingPodNames),
-	}
-	if !reflect.DeepEqual(instance.Status, status) {
-		instance.Status = status //把期望状态给运行态
-		err := r.Client.Status().Update(ctx, instance)
+	// Update status.Nodes if needed
+	if !reflect.DeepEqual(podNames, instance.Status.PodNames) {
+		instance.Status.PodNames = podNames
+		err := r.Status().Update(ctx, instance)
 		if err != nil {
-			reqLogger.Error(err, "更新pod失败")
+			log.Error(err, "Failed to update ImoocPod status")
 			return ctrl.Result{}, err
 		}
 	}
 
-	//4：len（pod） > 运行中的len（pod.replicas), 期望值小，需要 scale down delete
-	if len(existingPodNames) > instance.Spec.Replicas {
-		//delete
-		reqLogger.Info("正在删除pod,当前的podNames和期望的replicas：", existingPodNames, instance.Spec.Replicas)
-		pod := existingPods.Items[0]
-		err := r.Client.Delete(ctx, &pod)
-		if err != nil {
-			reqLogger.Error(err, "删除pod失败")
-			return ctrl.Result{}, err
-		}
+	return ctrl.Result{}, nil
+}
+
+// deploymentForImoocPod returns a memcached Deployment object
+func (r *ImoocPodReconciler) deploymentForImoocPod(m *xxxv1.ImoocPod) *appsv1.Deployment {
+	ls := labelsForImoocPod(m.Name)
+	replicas := m.Spec.Replicas
+
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: ls,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: ls,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Image:   "busybox",
+						Name:    "busybox",
+						Command: []string{"sleep", "3600"},
+					}},
+				},
+			},
+		},
 	}
+	// Set ImoocPod instance as the owner and controller
+	ctrl.SetControllerReference(m, dep, r.Scheme)
+	return dep
+}
 
-	//5：len（pod） < 运行中的len（pod.replicas), 期望值大，需要 scale up create
-	if len(existingPodNames) > instance.Spec.Replicas {
-		//delete
-		reqLogger.Info("正在创建pod,当前的podNames和期望的replicas：", existingPodNames, instance.Spec.Replicas)
-		//Define a new Pod object
-		pod := newPodForCR(instance)
+// labelsForImoocPod returns the labels for selecting the resources
+// belonging to the given memcached CR name.
+func labelsForImoocPod(name string) map[string]string {
+	return map[string]string{"app": "memcached", "memcached_cr": name}
+}
 
-		//Set ImoocPod instance as the owner and controller
-		if err := controllerutil.SetControllerReference(instance, pod, r.Scheme); err != nil {
-			return ctrl.Result{}, nil
-		}
-		err = r.Create(ctx, pod)
-		if err != nil {
-			reqLogger.Error(err, "创建pod失败")
-			return ctrl.Result{}, err
-		}
+// getPodNames returns the pod names of the array of pods passed in
+func getPodNames(pods []corev1.Pod) []string {
+	var podNames []string
+	for _, pod := range pods {
+		podNames = append(podNames, pod.Name)
 	}
-
-	/*	//Define a new Pod object
-		pod := newPodForCR(instance)
-
-		//Set ImoocPod instance as the owner and controller
-		if err := controllerutil.SetControllerReference(instance, pod, r.Scheme); err != nil {
-			return ctrl.Result{}, nil
-		}
-
-		//Check if the Pod already exists
-		found := &corev1.Pod{}
-		err = r.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, found)
-		if err != nil && errors.IsNotFound(err) {
-			reqLogger.Info("Create a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-			err = r.Create(ctx, pod)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			//Pod创建成功，不用重新排队 -dont requeue
-			return ctrl.Result{}, nil
-		} else if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		//pod已经存在，不用重新排队
-		reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)*/
-	return ctrl.Result{Requeue: true}, nil
+	return podNames
 }
 
 func (r *ImoocPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&xxxv1.ImoocPod{}).
 		Owns(&appsv1.Deployment{}).
-		Owns(&corev1.Pod{}).
 		Complete(r)
-}
-
-// newPodForCR retures a busybox pod with  the same name/namespace as the cr
-func newPodForCR(cr *xxxv1.ImoocPod) *corev1.Pod {
-	lables := map[string]string{
-		"app": cr.Name,
-	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    lables,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
-				},
-			},
-		},
-	}
 }
