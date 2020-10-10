@@ -2,6 +2,7 @@ apiVersion: xxx.bluemoon.com.cn/v1
 kind: ImoocPod
 metadata:
   name: imoocpod-sample
+  namespace: imoocpod-operator-system
 spec:
   # Add fields here
   replicas: 3
