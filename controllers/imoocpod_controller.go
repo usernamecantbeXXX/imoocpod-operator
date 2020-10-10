@@ -43,7 +43,7 @@ type ImoocPodReconciler struct {
 // +kubebuilder:rbac:groups=xxx.bluemoon.com.cn,resources=imoocpods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=xxx.bluemoon.com.cn,resources=imoocpods/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=,resources=pods,verbs=get;list;
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;
 
 //监听pod 的变化，实现监听的logic
 func (r *ImoocPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
